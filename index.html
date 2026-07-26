@@ -93,7 +93,11 @@ featBox.appendChild(lx);
 
 var map = L.map("map");
 if(rows.length){
-  map.fitBounds(L.latLngBounds(rows.map(function(r){ return [r.lat, r.lon]; })).pad(0.05));
+  // encuadre sobre el 2-98 percentil para que un par de outliers no alejen el zoom
+  var la = rows.map(function(r){return r.lat;}).sort(function(a,b){return a-b;});
+  var lo = rows.map(function(r){return r.lon;}).sort(function(a,b){return a-b;});
+  var p = function(a,q){ return a[Math.floor(q*(a.length-1))]; };
+  map.fitBounds(L.latLngBounds([p(la,.02), p(lo,.02)], [p(la,.98), p(lo,.98)]).pad(0.08));
 } else {
   map.setView([-34.618, -58.442], 14);
 }
