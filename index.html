@@ -50,6 +50,18 @@ button{padding:6px 11px;border:1px solid #ccc;background:#fff;border-radius:6px;
   <button id="importar">Importar CSV</button>
   <input type="file" id="archivoAnot" accept=".csv" style="display:none">
 </div>
+<h2>Sincronizar con GitHub</h2>
+<div style="font-size:11px;color:#888;margin-bottom:4px">
+  Token fine-grained con permiso <i>Contents: read and write</i> sobre este repo.
+  Queda guardado solo en este navegador.
+</div>
+<input type="password" id="ghToken" placeholder="ghp_..." style="width:100%;padding:4px 6px;
+  border:1px solid #ccc;border-radius:5px;margin-bottom:6px">
+<div style="display:flex;gap:6px;flex-wrap:wrap">
+  <button id="ghPush">Guardar en GitHub</button>
+  <button id="ghPull">Traer de GitHub</button>
+</div>
+<div id="ghEstado" style="color:#888;font-size:12px;margin-top:6px"></div>
 <div style="margin-top:14px"><button id="reset">Limpiar filtros</button></div>
 <h2>Resumen de la seleccion</h2><div id="stats"></div>
 <h2>Menor USD/m2</h2><table id="tbl"></table>
@@ -319,7 +331,7 @@ function resumenAnot(){
   document.getElementById("anotResumen").textContent = n === 0 ? "sin anotaciones todavia" :
     n + " anotados: " + Object.keys(porEstado).map(function(k){ return porEstado[k]+" "+k; }).join(", ");
 }
-document.getElementById("exportar").onclick = function(){
+function csvAnotaciones(){
   var ids = idsAnotados();
   var lineas = ["id;estado;tags;comentario;rating;publicar;actualizado"];
   Object.keys(ids).sort().forEach(function(id){
@@ -327,7 +339,33 @@ document.getElementById("exportar").onclick = function(){
     lineas.push([id, a.estado||"", a.tags||"", limpio(a.comentario), a.rating||"", 1,
                  a.actualizado||""].join(";"));
   });
-  var b = new Blob([lineas.join("\n")], {type:"text/csv"});
+  return lineas.join("\n");
+}
+function parseAnotaciones(texto){
+  var lineas = String(texto).split(/\r?\n/).filter(Boolean);
+  if(!lineas.length) return {};
+  var cab = lineas.shift().split(";").map(function(s){ return s.trim(); });
+  var out = {};
+  lineas.forEach(function(l){
+    var c = l.split(";"), o = {};
+    cab.forEach(function(k, i){ o[k] = (c[i] || "").trim(); });
+    if(o.id) out[o.id] = {estado:o.estado||"", tags:o.tags||"", comentario:o.comentario||"",
+                          rating:o.rating||"", actualizado:o.actualizado||""};
+  });
+  return out;
+}
+// merge por aviso: gana la version con `actualizado` mas nuevo
+function fusionar(viejo, nuevo){
+  var out = {};
+  Object.keys(viejo).forEach(function(k){ out[k] = viejo[k]; });
+  Object.keys(nuevo).forEach(function(k){
+    if(!out[k] || (nuevo[k].actualizado || "") >= (out[k].actualizado || "")) out[k] = nuevo[k];
+  });
+  return out;
+}
+
+document.getElementById("exportar").onclick = function(){
+  var b = new Blob([csvAnotaciones()], {type:"text/csv"});
   var d = new Date(), p = function(n){ return String(n).padStart(2,"0"); };
   var a2 = document.createElement("a");
   a2.href = URL.createObjectURL(b);
@@ -340,22 +378,69 @@ document.getElementById("archivoAnot").onchange = function(ev){
   var f = ev.target.files[0]; if(!f) return;
   var fr = new FileReader();
   fr.onload = function(){
-    var lineas = String(fr.result).split(/\r?\n/).filter(Boolean);
-    var cab = lineas.shift().split(";"), n = 0;
-    lineas.forEach(function(l){
-      var c = l.split(";"), o = {};
-      cab.forEach(function(k, i){ o[k.trim()] = (c[i] || "").trim(); });
-      if(!o.id) return;
-      ANOT_LOCAL[o.id] = {estado:o.estado||"", tags:o.tags||"", comentario:o.comentario||"",
-                          rating:o.rating||"", actualizado:o.actualizado||""};
-      n++;
-    });
+    var traidas = parseAnotaciones(fr.result);
+    ANOT_LOCAL = fusionar(ANOT_LOCAL, traidas);
     localStorage.setItem(LS_KEY, JSON.stringify(ANOT_LOCAL));
-    alert("Importadas "+n+" anotaciones.");
+    alert("Importadas " + Object.keys(traidas).length + " anotaciones.");
     resumenAnot(); apply();
   };
   fr.readAsText(f);
 };
+
+/* ---------------- sincronizacion con GitHub ----------------
+   El repo es la base de datos: el mapa LEE data/annotations.csv al abrirse (es
+   publico, no hace falta token) y ESCRIBE con la API usando tu token personal,
+   que nunca sale de este navegador. Asi las notas viajan entre tus dispositivos
+   sin tener que regenerar el HTML. */
+var GH = {owner:"Sherm4nLC", repo:"zonaprops-analysis", path:"data/annotations.csv", branch:"main"};
+var TOKEN_KEY = "zp_gh_token";
+var inputTok = document.getElementById("ghToken");
+inputTok.value = localStorage.getItem(TOKEN_KEY) || "";
+inputTok.onchange = function(){ localStorage.setItem(TOKEN_KEY, inputTok.value.trim()); };
+function estadoGh(txt){ document.getElementById("ghEstado").textContent = txt; }
+function b64(s){ return btoa(unescape(encodeURIComponent(s))); }
+function deB64(s){ return decodeURIComponent(escape(atob(s.replace(/\n/g, "")))); }
+
+async function traerDeGitHub(silencioso){
+  try {
+    var url = "https://raw.githubusercontent.com/"+GH.owner+"/"+GH.repo+"/"+GH.branch+
+              "/"+GH.path+"?t="+Date.now();
+    var r = await fetch(url, {cache:"no-store"});
+    if(r.status === 404){ if(!silencioso) estadoGh("Todavia no hay annotations.csv en el repo"); return; }
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    var remotas = parseAnotaciones(await r.text());
+    ANOT_LOCAL = fusionar(ANOT_LOCAL, remotas);
+    localStorage.setItem(LS_KEY, JSON.stringify(ANOT_LOCAL));
+    estadoGh("Traidas "+Object.keys(remotas).length+" anotaciones del repo");
+    resumenAnot(); apply();
+  } catch(e){ if(!silencioso) estadoGh("No se pudo leer del repo: "+e.message); }
+}
+async function guardarEnGitHub(){
+  var tok = (inputTok.value || "").trim();
+  if(!tok){ estadoGh("Falta el token"); return; }
+  localStorage.setItem(TOKEN_KEY, tok);
+  var api = "https://api.github.com/repos/"+GH.owner+"/"+GH.repo+"/contents/"+GH.path;
+  var cab = {"Authorization":"Bearer "+tok, "Accept":"application/vnd.github+json"};
+  try {
+    estadoGh("Sincronizando...");
+    await traerDeGitHub(true);                       // no pisar lo que hay en el repo
+    var sha = null;
+    var actual = await fetch(api+"?ref="+GH.branch+"&t="+Date.now(), {headers:cab, cache:"no-store"});
+    if(actual.ok) sha = (await actual.json()).sha;
+    else if(actual.status !== 404) throw new Error("lectura HTTP "+actual.status);
+    var cuerpo = {message:"anotaciones "+new Date().toISOString().slice(0,16).replace("T"," "),
+                  content:b64(csvAnotaciones()), branch:GH.branch};
+    if(sha) cuerpo.sha = sha;
+    var put = await fetch(api, {method:"PUT", headers:cab, body:JSON.stringify(cuerpo)});
+    if(!put.ok){
+      var det = await put.text();
+      throw new Error("HTTP "+put.status+" "+det.slice(0,120));
+    }
+    estadoGh("Guardado en el repo ("+Object.keys(idsAnotados()).length+" anotaciones)");
+  } catch(e){ estadoGh("Error: "+e.message); }
+}
+document.getElementById("ghPush").onclick = guardarEnGitHub;
+document.getElementById("ghPull").onclick = function(){ traerDeGitHub(false); };
 
 document.querySelectorAll("input").forEach(function(e){
   e.addEventListener("change", apply); e.addEventListener("keyup", apply);
@@ -375,7 +460,8 @@ document.getElementById("reset").onclick = function(){
 var legend = L.control({position:"bottomright"});
 legend.onAdd = function(){ var d = L.DomUtil.create("div","legend"); d.id = "lgd"; return d; };
 legend.addTo(map);
-document.getElementById("meta").textContent = rows.length + " avisos con geolocalizacion · datos Zonaprop 26/07/2026";
+document.getElementById("meta").textContent = rows.length + " avisos con geolocalizacion · datos Zonaprop 27/07/2026";
 resumenAnot();
 apply();
+traerDeGitHub(true);   // al abrir el mapa, trae lo ultimo que sincronizaste
 </script></body></html>
