@@ -26,7 +26,9 @@ button{padding:6px 11px;border:1px solid #ccc;background:#fff;border-radius:6px;
 <div id="meta" style="color:#888;font-size:12px"></div>
 <h2>Precio USD</h2><div class="row"><input type="number" id="pmin" placeholder="min"><span>-</span><input type="number" id="pmax" placeholder="max"></div>
 <h2>m2 cubiertos</h2><div class="row"><input type="number" id="mmin" placeholder="min"><span>-</span><input type="number" id="mmax" placeholder="max"></div>
+<h2>USD por m2</h2><div class="row"><input type="number" id="ppmin" placeholder="min"><span>-</span><input type="number" id="ppmax" placeholder="max"></div>
 <h2>Ambientes</h2><div id="amb"></div>
+<h2>Disposicion</h2><div id="disp"></div>
 <h2>Caracteristicas</h2><div id="feat"></div>
 <h2>Antiguedad maxima</h2><input type="number" id="ant" placeholder="anios">
 <div style="margin-top:14px"><button id="reset">Limpiar filtros</button></div>
@@ -43,7 +45,7 @@ var FEATS = [["f_balcon","Balcon"],["f_cochera","Cochera"],["f_apto_credito","Ap
 var rows = DATA.map(function(r){
   return {p:r[ix.price], m2:r[ix.m2], ppm:r[ix.usd_m2], amb:r[ix.ambientes]||0,
           ant:r[ix.antiguedad], lat:r[ix.lat], lon:r[ix.lon], dir:r[ix.direccion]||"",
-          inmo:r[ix.inmobiliaria]||"", exp:r[ix.expensas]||0, disp:r[ix.disposicion]||"",
+          inmo:r[ix.inmobiliaria]||"", exp:r[ix.expensas]||0, disp:r[ix.disposicion]||"(sin dato)",
           f:r, url:r[ix.url]};
 });
 var ambBox = document.getElementById("amb"), featBox = document.getElementById("feat");
@@ -57,6 +59,17 @@ FEATS.forEach(function(f){
   l.innerHTML = '<input type="checkbox" class="ff" value="'+f[0]+'"> '+f[1];
   featBox.appendChild(l);
 });
+var dispBox = document.getElementById("disp");
+var DISPS = ["Frente","Contrafrente","Lateral","Interno","(sin dato)"];
+var dispCount = {};
+rows.forEach(function(r){ dispCount[r.disp] = (dispCount[r.disp]||0) + 1; });
+DISPS.forEach(function(d){
+  if(!dispCount[d]) return;
+  var l = document.createElement("label"); l.className = "chip";
+  l.innerHTML = '<input type="checkbox" class="fd" value="'+d+'"> '+d+
+                ' <span style="color:#aaa">('+dispCount[d]+')</span>';
+  dispBox.appendChild(l);
+});
 var lx = document.createElement("label");
 lx.innerHTML = '<input type="checkbox" id="nopozo"> Excluir en pozo / a estrenar';
 featBox.appendChild(lx);
@@ -66,6 +79,7 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
             {maxZoom:19, attribution:"&copy; OpenStreetMap"}).addTo(map);
 var layer = L.layerGroup().addTo(map);
 var COL = ["#2c7bb6","#abd9e9","#ffffbf","#fdae61","#d7191c"];
+var bandSel = [];
 
 function quant(a, p){
   if(!a.length) return 0;
@@ -84,12 +98,17 @@ function apply(){
   var mmin = parseFloat(document.getElementById("mmin").value) || 0;
   var mmax = parseFloat(document.getElementById("mmax").value) || Infinity;
   var ant  = parseFloat(document.getElementById("ant").value);
+  var ppmin = parseFloat(document.getElementById("ppmin").value) || 0;
+  var ppmax = parseFloat(document.getElementById("ppmax").value) || Infinity;
   var ambs = [].slice.call(document.querySelectorAll(".fa:checked")).map(function(e){return parseInt(e.value);});
   var fs   = [].slice.call(document.querySelectorAll(".ff:checked")).map(function(e){return e.value;});
+  var disps = [].slice.call(document.querySelectorAll(".fd:checked")).map(function(e){return e.value;});
   var nopozo = document.getElementById("nopozo").checked;
   var out = rows.filter(function(r){
     if(r.p < pmin || r.p > pmax) return false;
     if(r.m2 < mmin || r.m2 > mmax) return false;
+    if(r.ppm < ppmin || r.ppm > ppmax) return false;
+    if(disps.length && disps.indexOf(r.disp) < 0) return false;
     if(ambs.length && ambs.indexOf(Math.min(r.amb,5)) < 0) return false;
     if(!isNaN(ant) && !(r.ant <= ant)) return false;
     for(var i=0;i<fs.length;i++){ if(r.f[ix[fs[i]]] !== 1) return false; }
@@ -98,15 +117,23 @@ function apply(){
   });
   draw(out);
 }
-function draw(out){
+function bandOf(v, br){
+  for(var i=0;i<br.length;i++){ if(v <= br[i]) return i; }
+  return 4;
+}
+function draw(all){
   layer.clearLayers();
+  // los cortes de color se calculan sobre la seleccion ANTES de filtrar por banda
+  var base = all.map(function(r){return r.ppm;});
+  var br = [quant(base,.2), quant(base,.4), quant(base,.6), quant(base,.8)];
+  var out = bandSel.length ? all.filter(function(r){ return bandSel.indexOf(bandOf(r.ppm, br)) >= 0; }) : all;
   var ppms = out.map(function(r){return r.ppm;});
-  var br = [quant(ppms,.2), quant(ppms,.4), quant(ppms,.6), quant(ppms,.8)];
   out.forEach(function(r){
     L.circleMarker([r.lat, r.lon], {radius:5, weight:1, color:"#333", opacity:.45,
         fillColor:colorFor(r.ppm, br), fillOpacity:.85})
      .bindPopup("<b>USD "+fmt(r.p)+"</b> &middot; "+fmt(r.ppm)+" USD/m2<br>"+
-        r.m2+" m2 &middot; "+r.amb+" amb &middot; "+(r.ant==null||isNaN(r.ant)?"s/d":r.ant+" anios")+"<br>"+
+        r.m2+" m2 &middot; "+r.amb+" amb &middot; "+(r.ant==null||isNaN(r.ant)?"s/d":r.ant+" anios")+
+        " &middot; "+r.disp+"<br>"+
         r.dir+"<br>"+(r.exp>1000?"Expensas $"+fmt(r.exp)+"<br>":"")+r.inmo+
         "<br><a href='"+r.url+"' target='_blank'>Ver aviso</a>")
      .addTo(layer);
@@ -123,10 +150,26 @@ function draw(out){
     .slice(0,15).map(function(r){
       return "<tr><td>"+fmt(r.ppm)+"</td><td>USD "+fmt(r.p)+"</td><td>"+r.m2+" m2</td>"+
              "<td><a href='"+r.url+"' target='_blank'>ver</a></td></tr>"; }).join("");
-  document.getElementById("lgd").innerHTML = "<b>USD/m2</b><br>" + COL.map(function(c,i){
-    var lo = i === 0 ? 0 : br[i-1], hi = i < 4 ? br[i] : null;
-    return "<i style='background:"+c+"'></i>"+fmt(lo)+(hi ? " - "+fmt(hi) : "+");
-  }).join("<br>");
+  var lgd = document.getElementById("lgd");
+  lgd.innerHTML = "<b>USD/m2</b> <span style='color:#888;font-weight:400'>(clic para filtrar)</span><br>" +
+    COL.map(function(c,i){
+      var lo = i === 0 ? 0 : br[i-1], hi = i < 4 ? br[i] : null;
+      var on = bandSel.length === 0 || bandSel.indexOf(i) >= 0;
+      return "<span class='band' data-b='"+i+"' style='cursor:pointer;opacity:"+(on?1:.35)+"'>" +
+             "<i style='background:"+c+"'></i>"+fmt(lo)+(hi ? " - "+fmt(hi) : "+")+"</span>";
+    }).join("<br>") +
+    (bandSel.length ? "<br><span id='bandclear' style='cursor:pointer;color:#1155cc'>ver todas</span>" : "");
+  L.DomEvent.disableClickPropagation(lgd);
+  [].slice.call(lgd.querySelectorAll(".band")).forEach(function(el){
+    el.onclick = function(){
+      var b = parseInt(el.getAttribute("data-b"));
+      var k = bandSel.indexOf(b);
+      if(k >= 0) bandSel.splice(k,1); else bandSel.push(b);
+      draw(all);
+    };
+  });
+  var clr = document.getElementById("bandclear");
+  if(clr) clr.onclick = function(){ bandSel = []; draw(all); };
 }
 document.querySelectorAll("input").forEach(function(e){
   e.addEventListener("change", apply); e.addEventListener("keyup", apply);
@@ -135,6 +178,7 @@ document.getElementById("reset").onclick = function(){
   document.querySelectorAll("input").forEach(function(e){
     if(e.type === "checkbox") e.checked = false; else e.value = "";
   });
+  bandSel = [];
   apply();
 };
 var legend = L.control({position:"bottomright"});
