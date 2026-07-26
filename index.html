@@ -142,6 +142,11 @@ var estadoSel = [];
 function anot(id){ return ANOT_LOCAL[id] || ANOT_BASE[id] || null; }
 function limpio(t){ return String(t == null ? "" : t).replace(/[;\n\r]/g, " ").trim(); }
 function guardar(id, patch){
+  // el ; es el separador del CSV: se limpia aca, no en la UI, para que ninguna
+  // via de entrada (teclado, import, consola) pueda romper el archivo exportado
+  ["comentario","tags","estado","rating"].forEach(function(k){
+    if(patch[k] != null) patch[k] = limpio(patch[k]);
+  });
   var a = Object.assign({estado:"", tags:"", comentario:"", rating:""},
                         ANOT_BASE[id] || {}, ANOT_LOCAL[id] || {}, patch);
   a.actualizado = new Date().toISOString().slice(0,19).replace("T"," ");
