@@ -1,5 +1,5 @@
 <!doctype html><html lang="es"><head><meta charset="utf-8">
-<title>Caballito - precios por zona (Zonaprop)</title>
+<title>Precios de departamentos en Buenos Aires (Zonaprop)</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -155,10 +155,18 @@ var layer = L.layerGroup().addTo(map);
    pierde sobre las avenidas; estas tres corren la clase central a algo con mas
    cuerpo, y todos los puntos llevan halo blanco para separarse entre si. */
 var PALETAS = {
-  "Azul - rojo":      ["#2166ac","#7fb8d9","#f0d9b5","#ef8a3c","#b2182b"],
-  "Teal - magenta":   ["#01665e","#5ab4ac","#e6dcc8","#d8769b","#8c1f4b"],
-  "Violeta - naranja":["#542788","#9e8bc0","#e4e0da","#e08214","#a63603"]
+  /* divergentes: separan bien los extremos, el centro es el punto debil */
+  "Azul - rojo":      ["#2166ac","#7fb8d9","#e8c96a","#ef8a3c","#b2182b"],
+  "Teal - magenta":   ["#01665e","#5ab4ac","#c9b97d","#d8769b","#8c1f4b"],
+  "Violeta - naranja":["#542788","#9e8bc0","#b0a89c","#e08214","#a63603"],
+  /* secuenciales: la luminosidad sube clase a clase, asi que las del medio
+     tambien se distinguen entre si, no solo los extremos */
+  "Viridis":          ["#46327e","#365c8d","#277f8e","#4ac16d","#a0da39"],
+  "Plasma":           ["#4c02a1","#8b0aa5","#cc4778","#f89441","#f0f921"],
+  "Azules":           ["#c6dbef","#6baed6","#3182bd","#08519c","#08306b"]
 };
+var TIPO_PALETA = {"Azul - rojo":"div","Teal - magenta":"div","Violeta - naranja":"div",
+                   "Viridis":"seq","Plasma":"seq","Azules":"seq"};
 var paletaActual = "Azul - rojo";
 var COL = PALETAS[paletaActual];
 var bandSel = [];
@@ -372,7 +380,14 @@ map.on("popupopen", function(ev){
 var pBox = document.getElementById("paletas");
 try { var guardada = localStorage.getItem("zp_paleta");
       if(guardada && PALETAS[guardada]){ paletaActual = guardada; COL = PALETAS[guardada]; } } catch(e){}
-Object.keys(PALETAS).forEach(function(nombre){
+["div","seq"].forEach(function(tipo){
+  var t = document.createElement("div");
+  t.style.cssText = "font-size:11px;color:#aaa;margin:4px 0 2px";
+  t.textContent = tipo === "div" ? "divergentes" : "secuenciales";
+  pBox.appendChild(t);
+  Object.keys(PALETAS).filter(function(n){ return TIPO_PALETA[n] === tipo; }).forEach(agregarPaleta);
+});
+function agregarPaleta(nombre){
   var s = document.createElement("span");
   s.className = "est" + (nombre === paletaActual ? " on" : "");
   if(nombre === paletaActual) s.style.background = "#1b1b1b";
@@ -388,7 +403,7 @@ Object.keys(PALETAS).forEach(function(nombre){
     apply();
   };
   pBox.appendChild(s);
-});
+}
 
 /* chips de cambios de precio */
 var cBox = document.getElementById("cambioFiltros");
