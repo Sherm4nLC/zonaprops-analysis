@@ -43,6 +43,8 @@ button{padding:6px 11px;border:1px solid #ccc;background:#fff;border-radius:6px;
 <h2>Disposicion</h2><div id="disp"></div>
 <h2>Caracteristicas</h2><div id="feat"></div>
 <h2>Antiguedad maxima</h2><input type="number" id="ant" placeholder="anios">
+<h2>Escala de color</h2>
+<div id="modos"></div>
 <h2>Paleta</h2>
 <div id="paletas"></div>
 <h2>Cambios de precio</h2>
@@ -171,6 +173,17 @@ var paletaActual = "Azul - rojo";
 var COL = PALETAS[paletaActual];
 var bandSel = [];
 
+/* Como se cortan las 5 clases de color. Siempre son percentiles DE LA SELECCION
+   actual, asi que al filtrar (p.ej. solo 2 amb en Belgrano) los cortes se
+   recalculan sobre esos avisos y el color vuelve a decir "barato para lo que
+   estas mirando". */
+var MODOS = {
+  "Quintiles (20% c/u)": {cortes:[.20,.40,.60,.80], etiquetas:["0-20%","20-40%","40-60%","60-80%","80-100%"]},
+  "Valor (15/30/45/60)": {cortes:[.15,.30,.45,.60], etiquetas:["15% mas barato","15-30%","30-45%","45-60%","60% mas caro"]}
+};
+var modoActual = "Valor (15/30/45/60)";
+try { var mg = localStorage.getItem("zp_modo"); if(mg && MODOS[mg]) modoActual = mg; } catch(e){}
+
 /* ---------------------- anotaciones propias ----------------------
    ANOT_BASE viene horneado desde data/annotations.csv; lo que edites aca se
    guarda en localStorage (solo en este navegador) y pisa a lo horneado.
@@ -291,7 +304,7 @@ function draw(all){
   layer.clearLayers();
   // los cortes de color se calculan sobre la seleccion ANTES de filtrar por banda
   var base = all.map(function(r){return r.ppm;});
-  var br = [quant(base,.2), quant(base,.4), quant(base,.6), quant(base,.8)];
+  var br = MODOS[modoActual].cortes.map(function(p){ return quant(base, p); });
   var out = bandSel.length ? all.filter(function(r){ return bandSel.indexOf(bandOf(r.ppm, br)) >= 0; }) : all;
   var ppms = out.map(function(r){return r.ppm;});
   out.forEach(function(r){
@@ -321,12 +334,14 @@ function draw(all){
       return "<tr><td>"+fmt(r.ppm)+"</td><td>USD "+fmt(r.p)+"</td><td>"+r.m2+" m2</td>"+
              "<td><a href='"+r.url+"' target='_blank'>ver</a></td></tr>"; }).join("");
   var lgd = document.getElementById("lgd");
+  var etq = MODOS[modoActual].etiquetas;
   lgd.innerHTML = "<b>USD/m2</b> <span style='color:#888;font-weight:400'>(clic para filtrar)</span><br>" +
     COL.map(function(c,i){
       var lo = i === 0 ? 0 : br[i-1], hi = i < 4 ? br[i] : null;
       var on = bandSel.length === 0 || bandSel.indexOf(i) >= 0;
       return "<span class='band' data-b='"+i+"' style='cursor:pointer;opacity:"+(on?1:.35)+"'>" +
-             "<i style='background:"+c+"'></i>"+fmt(lo)+(hi ? " - "+fmt(hi) : "+")+"</span>";
+             "<i style='background:"+c+"'></i>"+fmt(lo)+(hi ? " - "+fmt(hi) : "+")+
+             " <span style='color:#999'>"+etq[i]+"</span></span>";
     }).join("<br>") +
     (bandSel.length ? "<br><span id='bandclear' style='cursor:pointer;color:#1155cc'>ver todas</span>" : "");
   L.DomEvent.disableClickPropagation(lgd);
@@ -376,6 +391,24 @@ map.on("popupopen", function(ev){
 });
 
 /* ------- chips de estado, export / import ------- */
+/* selector de escala de color */
+var mBox = document.getElementById("modos");
+Object.keys(MODOS).forEach(function(nombre){
+  var s = document.createElement("span");
+  s.className = "est" + (nombre === modoActual ? " on" : "");
+  if(nombre === modoActual) s.style.background = "#1b1b1b";
+  s.textContent = nombre;
+  s.onclick = function(){
+    modoActual = nombre;
+    try { localStorage.setItem("zp_modo", nombre); } catch(e){}
+    [].slice.call(mBox.children).forEach(function(c){ c.classList.remove("on"); c.style.background = ""; });
+    s.classList.add("on"); s.style.background = "#1b1b1b";
+    bandSel = [];
+    apply();
+  };
+  mBox.appendChild(s);
+});
+
 /* selector de paleta: se guarda la elegida para que sobreviva a la recarga */
 var pBox = document.getElementById("paletas");
 try { var guardada = localStorage.getItem("zp_paleta");
@@ -581,6 +614,20 @@ var legend = L.control({position:"bottomright"});
 legend.onAdd = function(){ var d = L.DomUtil.create("div","legend"); d.id = "lgd"; return d; };
 legend.addTo(map);
 document.getElementById("meta").textContent = rows.length + " avisos con geolocalizacion · datos Zonaprop 28/07/2026";
+
+/* Filtros que quedan puestos al abrir: cambialos aca (o limpialos con el boton). */
+(function preseleccion(){
+  document.getElementById("pmax").value = 150000;
+  var marcar = function(sel, valores){
+    document.querySelectorAll(sel).forEach(function(e){
+      if(valores.indexOf(e.value) >= 0) e.checked = true;
+    });
+  };
+  marcar(".fb", ["Recoleta"]);          // barrio
+  marcar(".ff", ["f_balcon"]);          // caracteristica
+  marcar(".fd", ["Frente"]);            // disposicion
+})();
+
 resumenAnot();
 apply();
 traerDeGitHub(true);   // al abrir el mapa, trae lo ultimo que sincronizaste
