@@ -29,6 +29,9 @@ button{padding:6px 11px;border:1px solid #ccc;background:#fff;border-radius:6px;
      font:12px/1.35 system-ui;resize:vertical}
 .leaflet-popup-content{min-width:240px}
 .nota{font-size:12px;color:#444;font-style:italic}
+/* El mapa base compite con los puntos: se desatura para que el unico color en
+   pantalla sea el dato. Solo afecta a las tiles, no a los marcadores. */
+.leaflet-tile-pane{filter:grayscale(1) contrast(.92) brightness(1.06)}
 </style></head><body><div id="wrap"><div id="side">
 <h1 id="titulo">Departamentos en venta</h1>
 <div id="meta" style="color:#888;font-size:12px"></div>
@@ -40,6 +43,8 @@ button{padding:6px 11px;border:1px solid #ccc;background:#fff;border-radius:6px;
 <h2>Disposicion</h2><div id="disp"></div>
 <h2>Caracteristicas</h2><div id="feat"></div>
 <h2>Antiguedad maxima</h2><input type="number" id="ant" placeholder="anios">
+<h2>Paleta</h2>
+<div id="paletas"></div>
 <h2>Cambios de precio</h2>
 <div id="cambioFiltros"></div>
 <div class="row" style="margin-top:4px">
@@ -146,7 +151,16 @@ if(rows.length){
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
             {maxZoom:19, attribution:"&copy; OpenStreetMap"}).addTo(map);
 var layer = L.layerGroup().addTo(map);
-var COL = ["#2c7bb6","#abd9e9","#ffffbf","#fdae61","#d7191c"];
+/* Paletas divergentes a comparar. El problema del amarillo palido es que se
+   pierde sobre las avenidas; estas tres corren la clase central a algo con mas
+   cuerpo, y todos los puntos llevan halo blanco para separarse entre si. */
+var PALETAS = {
+  "Azul - rojo":      ["#2166ac","#7fb8d9","#f0d9b5","#ef8a3c","#b2182b"],
+  "Teal - magenta":   ["#01665e","#5ab4ac","#e6dcc8","#d8769b","#8c1f4b"],
+  "Violeta - naranja":["#542788","#9e8bc0","#e4e0da","#e08214","#a63603"]
+};
+var paletaActual = "Azul - rojo";
+var COL = PALETAS[paletaActual];
 var bandSel = [];
 
 /* ---------------------- anotaciones propias ----------------------
@@ -274,9 +288,9 @@ function draw(all){
   var ppms = out.map(function(r){return r.ppm;});
   out.forEach(function(r){
     var a = anot(r.id), est = a ? a.estado : "";
-    L.circleMarker([r.lat, r.lon], {radius: est ? 7 : 5, weight: est ? 3 : 1,
-        color: est ? (COLOR_EST[est] || "#333") : "#333", opacity: est ? 1 : .45,
-        fillColor:colorFor(r.ppm, br), fillOpacity:.85})
+    L.circleMarker([r.lat, r.lon], {radius: est ? 7.5 : 5.5, weight: est ? 3 : 1.2,
+        color: est ? (COLOR_EST[est] || "#333") : "#fff", opacity: est ? 1 : .9,
+        fillColor:colorFor(r.ppm, br), fillOpacity:.92})
      .bindPopup("<b>USD "+fmt(r.p)+"</b> &middot; "+fmt(r.ppm)+" USD/m2<br>"+
         r.m2+" m2 &middot; "+r.amb+" amb &middot; "+(r.ant==null||isNaN(r.ant)?"s/d":r.ant+" anios")+
         " &middot; "+r.disp+"<br>"+
@@ -354,6 +368,28 @@ map.on("popupopen", function(ev){
 });
 
 /* ------- chips de estado, export / import ------- */
+/* selector de paleta: se guarda la elegida para que sobreviva a la recarga */
+var pBox = document.getElementById("paletas");
+try { var guardada = localStorage.getItem("zp_paleta");
+      if(guardada && PALETAS[guardada]){ paletaActual = guardada; COL = PALETAS[guardada]; } } catch(e){}
+Object.keys(PALETAS).forEach(function(nombre){
+  var s = document.createElement("span");
+  s.className = "est" + (nombre === paletaActual ? " on" : "");
+  if(nombre === paletaActual) s.style.background = "#1b1b1b";
+  s.innerHTML = PALETAS[nombre].map(function(c){
+    return "<i style='display:inline-block;width:8px;height:8px;border-radius:50%;background:"+c+
+           ";margin-right:2px;vertical-align:middle'></i>";
+  }).join("") + " <span style='vertical-align:middle'>" + nombre + "</span>";
+  s.onclick = function(){
+    paletaActual = nombre; COL = PALETAS[nombre];
+    try { localStorage.setItem("zp_paleta", nombre); } catch(e){}
+    [].slice.call(pBox.children).forEach(function(c){ c.classList.remove("on"); c.style.background = ""; });
+    s.classList.add("on"); s.style.background = "#1b1b1b";
+    apply();
+  };
+  pBox.appendChild(s);
+});
+
 /* chips de cambios de precio */
 var cBox = document.getElementById("cambioFiltros");
 [["baja","Bajaron","#1a9641"], ["suba","Subieron","#c0392b"]].forEach(function(e){
