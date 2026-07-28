@@ -1,0 +1,217 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<title>Dispersion de precios - Zonaprop CABA</title>
+<style>
+body{margin:0;padding:26px 30px 60px;font:14px/1.5 system-ui,Segoe UI,Arial;color:#1b1b1b;background:#f6f6f4}
+h1{font-size:22px;margin:0 0 2px} h2{font-size:15px;margin:34px 0 4px}
+.sub{color:#888;font-size:13px;margin-bottom:2px}
+.card{background:#fff;border:1px solid #e3e3e0;border-radius:10px;padding:16px 18px;margin-top:10px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 4px}
+.tab{padding:5px 12px;border:1px solid #ccc;border-radius:20px;cursor:pointer;background:#fff;font-size:13px}
+.tab.on{background:#1b1b1b;color:#fff;border-color:#1b1b1b}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.ax{font-size:11px;fill:#999} .lbl{font-size:12px;fill:#333} .val{font-size:11px;fill:#666}
+.grid{stroke:#ececec;stroke-width:1}
+footer{color:#999;font-size:12px;margin-top:30px}
+</style></head><body>
+<h1>Dispersion de precios &middot; departamentos en venta</h1>
+<div class="sub" id="meta"></div>
+
+<h2>1 &middot; Distribucion de USD/m2 por barrio</h2>
+<div class="sub">Cada curva es la densidad de avisos. La linea vertical es la mediana; la barra clara, el rango intercuartil.</div>
+<div class="card"><svg id="ridge" viewBox="0 0 900 340"></svg></div>
+
+<h2>2 &middot; Cajas: donde se concentra cada corte</h2>
+<div class="sub">Caja = p25 a p75 (la mitad central de los avisos). Bigotes = p05 y p95. La linea gruesa es la mediana.</div>
+<div class="tabs" id="tabsDim"></div>
+<div class="card"><svg id="box" viewBox="0 0 900 420"></svg></div>
+
+<h2>3 &middot; Barrio x ambientes (mediana USD/m2)</h2>
+<div class="sub">Celdas con menos de 15 avisos quedan vacias.</div>
+<div class="card"><svg id="heat" viewBox="0 0 900 260"></svg></div>
+
+<h2>4 &middot; Cuanto paga cada caracteristica</h2>
+<div class="sub">Mediana de USD/m2 sin la caracteristica (gris) frente a con ella (color). La distancia es el premium.</div>
+<div class="tabs" id="tabsPrem"></div>
+<div class="card"><svg id="prem" viewBox="0 0 900 330"></svg></div>
+
+<footer id="pie"></footer>
+<script>
+var D = {"ridge": [{"grupo": "Palermo", "counts": [0.002, 0.0, 0.0, 0.002, 0.004, 0.0, 0.005, 0.007, 0.016, 0.071, 0.108, 0.198, 0.376, 0.466, 0.577, 0.586, 0.862, 0.675, 0.769, 0.822, 0.884, 1.0, 0.862, 0.88, 0.859, 0.797, 0.751, 0.67, 0.686, 0.566, 0.554, 0.439, 0.429, 0.418, 0.351, 0.282, 0.406, 0.261, 0.235, 0.224, 0.254, 0.198, 0.205, 0.208, 0.146, 0.111, 0.159, 0.129, 0.111, 0.069, 0.063, 0.09, 0.118, 0.053, 0.074, 0.127, 0.065, 0.06, 0.048, 0.437], "n": 11239, "p05": 2190, "p25": 2906, "p50": 3600, "p75": 4605, "p95": 6975}, {"grupo": "Belgrano", "counts": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.003, 0.003, 0.019, 0.022, 0.115, 0.186, 0.436, 0.548, 0.673, 0.724, 0.923, 0.91, 0.952, 0.849, 0.974, 1.0, 0.869, 0.955, 0.862, 0.814, 0.689, 0.583, 0.529, 0.49, 0.583, 0.401, 0.388, 0.34, 0.311, 0.202, 0.279, 0.234, 0.167, 0.157, 0.157, 0.147, 0.16, 0.138, 0.119, 0.042, 0.09, 0.08, 0.051, 0.071, 0.054, 0.051, 0.071, 0.061, 0.061, 0.067, 0.035, 0.045, 0.022, 0.394], "n": 5962, "p05": 2177, "p25": 2769, "p50": 3419, "p75": 4288, "p95": 6571}, {"grupo": "Recoleta", "counts": [0.0, 0.0, 0.003, 0.0, 0.006, 0.017, 0.022, 0.025, 0.109, 0.182, 0.291, 0.417, 0.599, 0.759, 0.955, 0.877, 0.98, 1.0, 0.888, 0.787, 0.695, 0.591, 0.65, 0.58, 0.493, 0.426, 0.381, 0.314, 0.303, 0.216, 0.227, 0.157, 0.157, 0.182, 0.154, 0.101, 0.109, 0.104, 0.073, 0.073, 0.073, 0.064, 0.059, 0.048, 0.059, 0.025, 0.048, 0.028, 0.036, 0.017, 0.022, 0.031, 0.028, 0.017, 0.022, 0.006, 0.025, 0.011, 0.031, 0.154], "n": 5250, "p05": 1907, "p25": 2414, "p50": 2909, "p75": 3660, "p95": 5602}, {"grupo": "Caballito", "counts": [0.003, 0.0, 0.0, 0.0, 0.006, 0.017, 0.051, 0.143, 0.264, 0.511, 0.739, 0.843, 1.0, 0.834, 0.888, 0.84, 0.775, 0.834, 0.669, 0.537, 0.618, 0.57, 0.57, 0.494, 0.36, 0.351, 0.275, 0.281, 0.222, 0.16, 0.118, 0.098, 0.093, 0.042, 0.096, 0.039, 0.056, 0.042, 0.037, 0.025, 0.008, 0.011, 0.006, 0.0, 0.003, 0.0, 0.003, 0.008, 0.003, 0.0, 0.006, 0.0, 0.0, 0.0, 0.003, 0.0, 0.0, 0.0, 0.0, 0.003], "n": 4825, "p05": 1675, "p25": 2096, "p50": 2600, "p75": 3250, "p95": 4266}, {"grupo": "Retiro", "counts": [0.0, 0.011, 0.0, 0.011, 0.032, 0.043, 0.097, 0.172, 0.462, 0.527, 0.613, 0.957, 0.946, 1.0, 0.656, 0.71, 0.989, 0.796, 0.645, 0.323, 0.462, 0.441, 0.312, 0.28, 0.204, 0.194, 0.301, 0.269, 0.161, 0.108, 0.172, 0.14, 0.172, 0.075, 0.097, 0.043, 0.043, 0.011, 0.032, 0.043, 0.022, 0.022, 0.022, 0.011, 0.022, 0.022, 0.0, 0.0, 0.011, 0.022, 0.0, 0.0, 0.011, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.022], "n": 1184, "p05": 1562, "p25": 2034, "p50": 2504, "p75": 3126, "p95": 4543}], "bins": [500, 625, 750, 875, 1000, 1125, 1250, 1375, 1500, 1625, 1750, 1875, 2000, 2125, 2250, 2375, 2500, 2625, 2750, 2875, 3000, 3125, 3250, 3375, 3500, 3625, 3750, 3875, 4000, 4125, 4250, 4375, 4500, 4625, 4750, 4875, 5000, 5125, 5250, 5375, 5500, 5625, 5750, 5875, 6000, 6125, 6250, 6375, 6500, 6625, 6750, 6875, 7000, 7125, 7250, 7375, 7500, 7625, 7750, 7875, 8000], "dims": {"Barrio": {"Belgrano": {"n": 5962, "p05": 2177, "p25": 2769, "p50": 3419, "p75": 4288, "p95": 6571}, "Caballito": {"n": 4825, "p05": 1675, "p25": 2096, "p50": 2600, "p75": 3250, "p95": 4266}, "Palermo": {"n": 11239, "p05": 2190, "p25": 2906, "p50": 3600, "p75": 4605, "p95": 6975}, "Recoleta": {"n": 5250, "p05": 1907, "p25": 2414, "p50": 2909, "p75": 3660, "p95": 5602}, "Retiro": {"n": 1184, "p05": 1562, "p25": 2034, "p50": 2504, "p75": 3126, "p95": 4543}}, "Ambientes": {"1 amb": {"n": 5469, "p05": 2149, "p25": 2761, "p50": 3333, "p75": 3929, "p95": 5139}, "2 amb": {"n": 7180, "p05": 1949, "p25": 2625, "p50": 3333, "p75": 4192, "p95": 5891}, "3 amb": {"n": 6903, "p05": 1866, "p25": 2444, "p50": 3068, "p75": 4033, "p95": 6269}, "4 amb": {"n": 5978, "p05": 1856, "p25": 2436, "p50": 3077, "p75": 4138, "p95": 7331}, "5+ amb": {"n": 2700, "p05": 1787, "p25": 2425, "p50": 3138, "p75": 4176, "p95": 7487}, "s/d": {"n": 230, "p05": 1991, "p25": 2594, "p50": 3042, "p75": 4086, "p95": 6413}}, "Disposicion": {"(sin dato)": {"n": 5457, "p05": 1885, "p25": 2498, "p50": 3161, "p75": 4118, "p95": 6619}, "Contrafrente": {"n": 7064, "p05": 1943, "p25": 2604, "p50": 3228, "p75": 3988, "p95": 5761}, "Frente": {"n": 13746, "p05": 1955, "p25": 2629, "p50": 3324, "p75": 4225, "p95": 6481}, "Interno": {"n": 1053, "p05": 1750, "p25": 2125, "p50": 2500, "p75": 3088, "p95": 4401}, "Lateral": {"n": 1140, "p05": 1817, "p25": 2233, "p50": 2656, "p75": 3385, "p95": 5779}}, "Antiguedad": {"0-5": {"n": 1433, "p05": 2458, "p25": 3120, "p50": 3804, "p75": 4600, "p95": 6897}, "16-30": {"n": 2592, "p05": 2061, "p25": 2680, "p50": 3207, "p75": 3890, "p95": 5906}, "31-50": {"n": 7469, "p05": 1810, "p25": 2250, "p50": 2650, "p75": 3146, "p95": 4193}, "50+": {"n": 4575, "p05": 1692, "p25": 2111, "p50": 2500, "p75": 2971, "p95": 4060}, "6-15": {"n": 2464, "p05": 2390, "p25": 3022, "p50": 3566, "p75": 4325, "p95": 6554}, "nan": {"n": 9927, "p05": 2455, "p25": 3295, "p50": 3971, "p75": 4961, "p95": 7266}}, "Caracteristicas": {"Balcon: si": {"n": 19081, "p05": 2000, "p25": 2671, "p50": 3318, "p75": 4161, "p95": 6297}, "Balcon: no": {"n": 9379, "p05": 1795, "p25": 2340, "p50": 2918, "p75": 3871, "p95": 6175}, "Cochera: si": {"n": 11760, "p05": 2207, "p25": 2950, "p50": 3657, "p75": 4703, "p95": 7200}, "Cochera: no": {"n": 16700, "p05": 1822, "p25": 2360, "p50": 2906, "p75": 3658, "p95": 5281}, "Apto credito: si": {"n": 3570, "p05": 1800, "p25": 2257, "p50": 2708, "p75": 3286, "p95": 4414}, "Apto credito: no": {"n": 24890, "p05": 1940, "p25": 2604, "p50": 3296, "p75": 4202, "p95": 6455}, "Parrilla: si": {"n": 8214, "p05": 2484, "p25": 3250, "p50": 3875, "p75": 4806, "p95": 7051}, "Parrilla: no": {"n": 20246, "p05": 1848, "p25": 2382, "p50": 2919, "p75": 3700, "p95": 5729}, "Pileta: si": {"n": 8533, "p05": 2703, "p25": 3442, "p50": 4175, "p75": 5250, "p95": 7534}, "Pileta: no": {"n": 19927, "p05": 1837, "p25": 2361, "p50": 2857, "p75": 3533, "p95": 5000}, "Amenities: si": {"n": 8490, "p05": 2700, "p25": 3442, "p50": 4125, "p75": 5170, "p95": 7451}, "Amenities: no": {"n": 19970, "p05": 1835, "p25": 2361, "p50": 2863, "p75": 3543, "p95": 5116}, "Terraza: si": {"n": 8852, "p05": 2164, "p25": 3016, "p50": 3714, "p75": 4697, "p95": 7183}, "Terraza: no": {"n": 19608, "p05": 1862, "p25": 2414, "p50": 2989, "p75": 3757, "p95": 5714}, "Pozo / a estrenar: si": {"n": 4949, "p05": 2500, "p25": 3224, "p50": 3778, "p75": 4632, "p95": 6628}, "Pozo / a estrenar: no": {"n": 23511, "p05": 1873, "p25": 2450, "p50": 3062, "p75": 3919, "p95": 6134}}}, "heat": {"zonas": ["Palermo", "Belgrano", "Recoleta", "Caballito", "Retiro"], "ambs": ["1 amb", "2 amb", "3 amb", "4 amb", "5+ amb"], "m": [[3526, 3672, 3500, 3674, 4000], [3498, 3556, 3334, 3273, 3282], [3194, 3077, 2819, 2721, 2895], [2661, 2725, 2512, 2486, 2400], [2621, 2259, 2526, 2595, 2579]]}, "premium": {"Todos": [{"f": "Balcon", "con": 3318, "sin": 2918, "n": 19081}, {"f": "Cochera", "con": 3657, "sin": 2906, "n": 11760}, {"f": "Apto credito", "con": 2708, "sin": 3296, "n": 3570}, {"f": "Parrilla", "con": 3875, "sin": 2919, "n": 8214}, {"f": "Pileta", "con": 4175, "sin": 2857, "n": 8533}, {"f": "Amenities", "con": 4125, "sin": 2863, "n": 8490}, {"f": "Terraza", "con": 3714, "sin": 2989, "n": 8852}, {"f": "Pozo / a estrenar", "con": 3778, "sin": 3062, "n": 4949}], "Palermo": [{"f": "Balcon", "con": 3690, "sin": 3387, "n": 7749}, {"f": "Cochera", "con": 4194, "sin": 3274, "n": 4732}, {"f": "Apto credito", "con": 3030, "sin": 3700, "n": 1185}, {"f": "Parrilla", "con": 4146, "sin": 3287, "n": 3979}, {"f": "Pileta", "con": 4444, "sin": 3182, "n": 4331}, {"f": "Amenities", "con": 4375, "sin": 3173, "n": 4297}, {"f": "Terraza", "con": 4070, "sin": 3375, "n": 3831}, {"f": "Pozo / a estrenar", "con": 4038, "sin": 3465, "n": 2225}], "Belgrano": [{"f": "Balcon", "con": 3474, "sin": 3172, "n": 4362}, {"f": "Cochera", "con": 3733, "sin": 3144, "n": 2858}, {"f": "Apto credito", "con": 2900, "sin": 3488, "n": 674}, {"f": "Parrilla", "con": 3957, "sin": 3095, "n": 2085}, {"f": "Pileta", "con": 4265, "sin": 3000, "n": 2273}, {"f": "Amenities", "con": 4217, "sin": 3020, "n": 2175}, {"f": "Terraza", "con": 3862, "sin": 3180, "n": 2185}, {"f": "Pozo / a estrenar", "con": 3917, "sin": 3241, "n": 1299}], "Recoleta": [{"f": "Balcon", "con": 2989, "sin": 2800, "n": 2986}, {"f": "Cochera", "con": 3291, "sin": 2750, "n": 1788}, {"f": "Apto credito", "con": 2605, "sin": 2967, "n": 647}, {"f": "Parrilla", "con": 3868, "sin": 2805, "n": 677}, {"f": "Pileta", "con": 4098, "sin": 2791, "n": 634}, {"f": "Amenities", "con": 4286, "sin": 2781, "n": 687}, {"f": "Terraza", "con": 3423, "sin": 2811, "n": 1052}, {"f": "Pozo / a estrenar", "con": 3906, "sin": 2833, "n": 455}], "Caballito": [{"f": "Balcon", "con": 2714, "sin": 2267, "n": 3495}, {"f": "Cochera", "con": 3080, "sin": 2310, "n": 2006}, {"f": "Apto credito", "con": 2359, "sin": 2673, "n": 914}, {"f": "Parrilla", "con": 3194, "sin": 2357, "n": 1405}, {"f": "Pileta", "con": 3333, "sin": 2391, "n": 1146}, {"f": "Amenities", "con": 3300, "sin": 2381, "n": 1186}, {"f": "Terraza", "con": 3032, "sin": 2414, "n": 1543}, {"f": "Pozo / a estrenar", "con": 3132, "sin": 2445, "n": 896}], "Retiro": [{"f": "Balcon", "con": 2598, "sin": 2417, "n": 489}, {"f": "Cochera", "con": 3000, "sin": 2263, "n": 376}, {"f": "Apto credito", "con": 2320, "sin": 2535, "n": 150}, {"f": "Parrilla", "con": 3055, "sin": 2490, "n": 68}, {"f": "Pileta", "con": 3990, "sin": 2390, "n": 149}, {"f": "Amenities", "con": 3779, "sin": 2400, "n": 145}, {"f": "Terraza", "con": 3194, "sin": 2388, "n": 241}, {"f": "Pozo / a estrenar", "con": 3502, "sin": 2465, "n": 74}]}, "total": 28460, "fecha": "28/07/2026"};
+var COLORES = ["#2c7bb6","#7b3294","#d7191c","#fdae61","#1a9641","#666","#008b8b"];
+var fmt = function(n){ return n == null ? "" : Math.round(n).toLocaleString("es-AR"); };
+function el(tag, attrs, txt){
+  var e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for(var k in attrs) e.setAttribute(k, attrs[k]);
+  if(txt != null) e.textContent = txt;
+  return e;
+}
+document.getElementById("meta").textContent =
+  fmt(D.total)+" avisos analizables - datos Zonaprop "+D.fecha;
+document.getElementById("pie").textContent =
+  "USD/m2 = precio publicado / m2 cubiertos. Se excluyen avisos sin precio en USD, sin superficie o fuera del rango 300-12.000 USD/m2.";
+
+/* ---------------- 1. ridgeline ---------------- */
+(function(){
+  var svg = document.getElementById("ridge"), W = 900, H = 340;
+  var L = 110, R = 40, T = 16, alto = (H - T - 46) / D.ridge.length;
+  var x0 = D.bins[0], x1 = D.bins[D.bins.length-1];
+  var X = function(v){ return L + (v - x0) / (x1 - x0) * (W - L - R); };
+  [1000,2000,3000,4000,5000,6000,7000,8000].forEach(function(t){
+    svg.appendChild(el("line", {x1:X(t), x2:X(t), y1:T, y2:H-40, class:"grid"}));
+    svg.appendChild(el("text", {x:X(t), y:H-24, class:"ax", "text-anchor":"middle"}, fmt(t)));
+  });
+  svg.appendChild(el("text", {x:W/2, y:H-6, class:"ax", "text-anchor":"middle"}, "USD por m2"));
+  D.ridge.forEach(function(r, i){
+    var base = T + alto*(i+1) - 6, col = COLORES[i % COLORES.length];
+    svg.appendChild(el("rect", {x:X(r.p25), y:base-alto+8, width:X(r.p75)-X(r.p25),
+                                height:alto-10, fill:col, opacity:.10}));
+    var pts = [];
+    r.counts.forEach(function(c, j){
+      var xm = (D.bins[j] + D.bins[j+1]) / 2;
+      pts.push(X(xm)+","+(base - c*(alto-12)));
+    });
+    svg.appendChild(el("polyline", {points:pts.join(" "), fill:"none", stroke:col,
+                                    "stroke-width":1.8, "stroke-linejoin":"round"}));
+    svg.appendChild(el("polygon", {points:X(x0)+","+base+" "+pts.join(" ")+" "+X(x1)+","+base,
+                                   fill:col, opacity:.16}));
+    svg.appendChild(el("line", {x1:X(r.p50), x2:X(r.p50), y1:base-alto+10, y2:base,
+                                stroke:col, "stroke-width":2}));
+    svg.appendChild(el("text", {x:L-10, y:base-4, class:"lbl", "text-anchor":"end"}, r.grupo));
+    svg.appendChild(el("text", {x:L-10, y:base+9, class:"ax", "text-anchor":"end"},
+                       "n="+fmt(r.n)+" - mediana "+fmt(r.p50)));
+  });
+})();
+
+/* ---------------- 2. cajas ---------------- */
+var dimActual = Object.keys(D.dims)[0];
+function dibujarCajas(){
+  var svg = document.getElementById("box");
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var datos = D.dims[dimActual];
+  var claves = Object.keys(datos).sort(function(a,b){ return datos[b].p50 - datos[a].p50; });
+  var W = 900, L = 150, R = 60, T = 14;
+  var alto = Math.max(20, Math.min(34, 380 / claves.length));
+  var H = T + alto*claves.length + 40;
+  svg.setAttribute("viewBox", "0 0 900 "+H);
+  var lo = 0, hi = 0;
+  claves.forEach(function(k){ hi = Math.max(hi, datos[k].p95); });
+  hi = Math.ceil(hi/1000)*1000;
+  var X = function(v){ return L + (v-lo)/(hi-lo)*(W-L-R); };
+  for(var t = 0; t <= hi; t += 1000){
+    svg.appendChild(el("line", {x1:X(t), x2:X(t), y1:T, y2:H-34, class:"grid"}));
+    svg.appendChild(el("text", {x:X(t), y:H-18, class:"ax", "text-anchor":"middle"}, fmt(t)));
+  }
+  svg.appendChild(el("text", {x:W/2, y:H-2, class:"ax", "text-anchor":"middle"}, "USD por m2"));
+  claves.forEach(function(k, i){
+    var q = datos[k], y = T + alto*i + alto/2, col = COLORES[i % COLORES.length];
+    svg.appendChild(el("line", {x1:X(q.p05), x2:X(q.p95), y1:y, y2:y, stroke:col,
+                                "stroke-width":1.2, opacity:.55}));
+    [q.p05, q.p95].forEach(function(v){
+      svg.appendChild(el("line", {x1:X(v), x2:X(v), y1:y-4, y2:y+4, stroke:col, "stroke-width":1.2, opacity:.55}));
+    });
+    svg.appendChild(el("rect", {x:X(q.p25), y:y-alto*0.28, width:X(q.p75)-X(q.p25),
+                                height:alto*0.56, fill:col, opacity:.22, rx:2}));
+    svg.appendChild(el("line", {x1:X(q.p50), x2:X(q.p50), y1:y-alto*0.30, y2:y+alto*0.30,
+                                stroke:col, "stroke-width":2.6}));
+    svg.appendChild(el("text", {x:L-10, y:y+4, class:"lbl", "text-anchor":"end"}, k));
+    svg.appendChild(el("text", {x:X(q.p95)+8, y:y+4, class:"val"},
+                       fmt(q.p50)+"  (n="+fmt(q.n)+")"));
+  });
+}
+var tabs = document.getElementById("tabsDim");
+Object.keys(D.dims).forEach(function(k, i){
+  var b = document.createElement("span");
+  b.className = "tab" + (i === 0 ? " on" : ""); b.textContent = k;
+  b.onclick = function(){
+    dimActual = k;
+    [].slice.call(tabs.children).forEach(function(c){ c.classList.remove("on"); });
+    b.classList.add("on"); dibujarCajas();
+  };
+  tabs.appendChild(b);
+});
+dibujarCajas();
+
+/* ---------------- 3. heatmap ---------------- */
+(function(){
+  var svg = document.getElementById("heat"), W = 900, L = 150, T = 34;
+  var cw = (W - L - 30) / D.heat.ambs.length, ch = 34;
+  var H = T + ch*D.heat.zonas.length + 20;
+  svg.setAttribute("viewBox", "0 0 900 "+H);
+  var vals = [];
+  D.heat.m.forEach(function(f){ f.forEach(function(v){ if(v != null) vals.push(v); }); });
+  var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+  function color(v){
+    var t = (v - lo) / (hi - lo);
+    var c = [[44,123,182],[171,217,233],[255,255,191],[253,174,97],[215,25,28]];
+    var i = Math.min(3, Math.floor(t*4)), f = t*4 - i;
+    var a = c[i], b = c[i+1];
+    return "rgb("+Math.round(a[0]+(b[0]-a[0])*f)+","+Math.round(a[1]+(b[1]-a[1])*f)+","+
+           Math.round(a[2]+(b[2]-a[2])*f)+")";
+  }
+  D.heat.ambs.forEach(function(a, j){
+    svg.appendChild(el("text", {x:L+cw*j+cw/2, y:T-12, class:"lbl", "text-anchor":"middle"}, a));
+  });
+  D.heat.zonas.forEach(function(z, i){
+    svg.appendChild(el("text", {x:L-10, y:T+ch*i+ch/2+4, class:"lbl", "text-anchor":"end"}, z));
+    D.heat.m[i].forEach(function(v, j){
+      if(v == null){
+        svg.appendChild(el("rect", {x:L+cw*j+1, y:T+ch*i+1, width:cw-2, height:ch-2,
+                                    fill:"#f4f4f2", rx:3}));
+        return;
+      }
+      svg.appendChild(el("rect", {x:L+cw*j+1, y:T+ch*i+1, width:cw-2, height:ch-2,
+                                  fill:color(v), rx:3}));
+      var t = (v-lo)/(hi-lo);
+      svg.appendChild(el("text", {x:L+cw*j+cw/2, y:T+ch*i+ch/2+4, "text-anchor":"middle",
+                                  "font-size":12, fill: (t>.72||t<.14) ? "#fff" : "#333"}, fmt(v)));
+    });
+  });
+})();
+
+/* ---------------- 4. dumbbells ---------------- */
+var premActual = "Todos";
+function dibujarPrem(){
+  var svg = document.getElementById("prem");
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var filas = D.premium[premActual] || [];
+  var W = 900, L = 150, R = 90, T = 16, alto = 34;
+  var H = T + alto*Math.max(filas.length,1) + 36;
+  svg.setAttribute("viewBox", "0 0 900 "+H);
+  if(!filas.length){
+    svg.appendChild(el("text", {x:20, y:40, class:"ax"}, "Muy pocos avisos en este barrio"));
+    return;
+  }
+  var lo = 1e9, hi = 0;
+  filas.forEach(function(f){ lo = Math.min(lo, f.con, f.sin); hi = Math.max(hi, f.con, f.sin); });
+  lo = Math.floor(lo/500)*500 - 200; hi = Math.ceil(hi/500)*500 + 200;
+  var X = function(v){ return L + (v-lo)/(hi-lo)*(W-L-R); };
+  for(var t = Math.ceil(lo/500)*500; t <= hi; t += 500){
+    svg.appendChild(el("line", {x1:X(t), x2:X(t), y1:T, y2:H-30, class:"grid"}));
+    svg.appendChild(el("text", {x:X(t), y:H-14, class:"ax", "text-anchor":"middle"}, fmt(t)));
+  }
+  filas.slice().sort(function(a,b){ return (b.con/b.sin) - (a.con/a.sin); })
+       .forEach(function(f, i){
+    var y = T + alto*i + alto/2;
+    var sube = f.con >= f.sin, col = sube ? "#1a9641" : "#c0392b";
+    svg.appendChild(el("line", {x1:X(f.sin), x2:X(f.con), y1:y, y2:y, stroke:col, "stroke-width":2.5, opacity:.5}));
+    svg.appendChild(el("circle", {cx:X(f.sin), cy:y, r:5, fill:"#bbb"}));
+    svg.appendChild(el("circle", {cx:X(f.con), cy:y, r:6, fill:col}));
+    svg.appendChild(el("text", {x:L-10, y:y+4, class:"lbl", "text-anchor":"end"}, f.f));
+    var pct = Math.round((f.con/f.sin - 1)*100);
+    svg.appendChild(el("text", {x:W-R+10, y:y+4, class:"val", fill:col},
+                       (pct>0?"+":"")+pct+"%"));
+  });
+}
+var tabsP = document.getElementById("tabsPrem");
+Object.keys(D.premium).forEach(function(k, i){
+  var b = document.createElement("span");
+  b.className = "tab" + (i === 0 ? " on" : ""); b.textContent = k;
+  b.onclick = function(){
+    premActual = k;
+    [].slice.call(tabsP.children).forEach(function(c){ c.classList.remove("on"); });
+    b.classList.add("on"); dibujarPrem();
+  };
+  tabsP.appendChild(b);
+});
+dibujarPrem();
+</script></body></html>
